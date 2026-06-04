@@ -2,15 +2,15 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pigeon</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Pigeon Islands</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
 body {
   margin:0;
   overflow:hidden;
-  font-family:Arial;
   background:#6fb7e9;
+  font-family:Arial;
   touch-action:none;
 }
 
@@ -38,26 +38,22 @@ button {
   top:10px;
   left:10px;
   color:white;
-  font-size:22px;
-  z-index:5;
+  font-size:20px;
 }
 
-canvas {
-  display:block;
-}
+canvas { display:block; }
 </style>
 </head>
 
 <body>
 
 <div id="home">
-  <h1>Pigeon</h1>
-  <p>Keep pigeons on islands for 2 minutes</p>
+  <h1>Pigeon Islands</h1>
+  <p>Keep pigeons LOW. They multiply if they meet!</p>
   <button onclick="start()">Start</button>
 </div>
 
 <div id="hud">
-  Time: <span id="time">120</span> |
   Pigeons: <span id="count">0</span>
 </div>
 
@@ -67,106 +63,98 @@ canvas {
 const c = document.getElementById("c");
 const ctx = c.getContext("2d");
 
-let W, H;
-
+let W,H;
 function resize(){
-  W = c.width = window.innerWidth;
-  H = c.height = window.innerHeight;
+  W = c.width = innerWidth;
+  H = c.height = innerHeight;
 }
-window.addEventListener("resize", resize);
+window.onresize = resize;
 resize();
 
-// image
+// ✅ YOUR IMAGE (kept wrong spelling)
 const pigeonImg = new Image();
-pigeonImg.src = "images/pigeon.png";
+pigeonImg.src = "images/pigion.png";
 
-// game state
+// ---------- game ----------
 let pigeons = [];
 let islands = [];
-let running = false;
-let time = 120;
 let dragging = null;
+let running = false;
 
-// ---------- setup ----------
+// ---------- islands ----------
 function makeIslands(){
   islands = [
-    {x:W*0.1, y:H*0.25, w:W*0.25, h:H*0.25},
-    {x:W*0.4, y:H*0.15, w:W*0.3,  h:H*0.3},
-    {x:W*0.7, y:H*0.35, w:W*0.25, h:H*0.25},
+    {x:W*0.1,y:H*0.5,w:140,h:140},
+    {x:W*0.4,y:H*0.3,w:160,h:160},
+    {x:W*0.7,y:H*0.5,w:140,h:140},
   ];
 }
 
-function spawn(x,y){
+// ---------- pigeons ----------
+function spawn(x,y,child=false){
   pigeons.push({
     x,y,
-    vx:(Math.random()-0.5)*2,
-    vy:(Math.random()-0.5)*2
+    vx:0,vy:0,
+    child:child,
+    age: child ? 0 : 999,
+    breedCooldown:0
   });
 }
 
-// ---------- start ----------
 function start(){
   document.getElementById("home").style.display="none";
-
-  pigeons = [];
-  time = 120;
-  running = true;
-
+  pigeons=[];
   makeIslands();
+  running=true;
 
-  for(let i=0;i<8;i++){
-    spawn(islands[0].x+80+Math.random()*100, islands[0].y+80+Math.random()*100);
-  }
+  // 4 pigeons
+  spawn(islands[0].x+50,islands[0].y+50);
+  spawn(islands[0].x+90,islands[0].y+90);
+  spawn(islands[1].x+60,islands[1].y+60);
+  spawn(islands[2].x+60,islands[2].y+60);
 
-  last = performance.now();
   requestAnimationFrame(loop);
-
-  setInterval(()=>{
-    if(!running) return;
-    time--;
-    document.getElementById("time").innerText = time;
-    if(time<=0) running=false;
-  },1000);
 }
 
-// ---------- logic ----------
+// ---------- update ----------
 function update(){
   for(let p of pigeons){
 
-    // flock drift (natural movement)
-    p.vx += (Math.random()-0.5)*0.3;
-    p.vy += (Math.random()-0.5)*0.3;
-
-    // speed cap
-    const sp = Math.hypot(p.vx,p.vy);
-    if(sp>3){
-      p.vx *= 3/sp;
-      p.vy *= 3/sp;
+    // grow child
+    if(p.child){
+      p.age++;
+      if(p.age > 60*20) p.child=false; // 20 seconds
     }
 
-    if(!dragging || dragging!==p){
+    if(p.breedCooldown>0) p.breedCooldown--;
+
+    // movement
+    if(p !== dragging){
+      p.vx += (Math.random()-0.5)*0.2;
+      p.vy += (Math.random()-0.5)*0.2;
+
       p.x += p.vx;
       p.y += p.vy;
     }
+  }
 
-    // island check
-    let safe = islands.some(i =>
-      p.x>i.x && p.x<i.x+i.w && p.y>i.y && p.y<i.y+i.h
-    );
+  // breeding
+  for(let i=0;i<pigeons.length;i++){
+    for(let j=i+1;j<pigeons.length;j++){
 
-    // gently pull back if off islands
-    if(!safe && !dragging){
-      let best = islands[0];
-      let bd = 1e9;
+      let a=pigeons[i];
+      let b=pigeons[j];
 
-      for(let i of islands){
-        let cx=i.x+i.w/2, cy=i.y+i.h/2;
-        let d=Math.hypot(p.x-cx,p.y-cy);
-        if(d<bd){bd=d;best=i;}
+      let d=Math.hypot(a.x-b.x,a.y-b.y);
+
+      if(d<40 && !a.child && !b.child &&
+         a.breedCooldown===0 && b.breedCooldown===0){
+
+        spawn((a.x+b.x)/2,(a.y+b.y)/2,true);
+
+        a.breedCooldown = 300;
+        b.breedCooldown = 300;
       }
-
-      p.vx += (best.x+best.w/2 - p.x)*0.001;
-      p.vy += (best.y+best.h/2 - p.y)*0.001;
     }
   }
 
@@ -178,30 +166,51 @@ function draw(){
   ctx.fillStyle="#4aa3df";
   ctx.fillRect(0,0,W,H);
 
+  // islands (cube look)
   for(let i of islands){
-    ctx.fillStyle="#2f7d32";
+
+    // top
+    ctx.fillStyle="#3faa3f";
     ctx.fillRect(i.x,i.y,i.w,i.h);
 
+    // side
+    ctx.fillStyle="#2f7d32";
+    ctx.beginPath();
+    ctx.moveTo(i.x, i.y+i.h);
+    ctx.lineTo(i.x+20, i.y+i.h+20);
+    ctx.lineTo(i.x+i.w+20, i.y+i.h+20);
+    ctx.lineTo(i.x+i.w, i.y+i.h);
+    ctx.fill();
+
+    // outline
     ctx.strokeStyle="#d2b48c";
-    ctx.lineWidth=12;
+    ctx.lineWidth=6;
     ctx.strokeRect(i.x,i.y,i.w,i.h);
   }
 
+  // pigeons (YOUR IMAGE)
   for(let p of pigeons){
+
     if(pigeonImg.complete){
-      ctx.drawImage(pigeonImg, p.x-30, p.y-30, 60, 60);
+      ctx.drawImage(
+        pigeonImg,
+        p.x - (p.child ? 15 : 20),
+        p.y - (p.child ? 15 : 20),
+        p.child ? 30 : 40,
+        p.child ? 30 : 40
+      );
     } else {
-      ctx.fillStyle="white";
+      // fallback
       ctx.beginPath();
-      ctx.arc(p.x,p.y,15,0,Math.PI*2);
+      ctx.arc(p.x,p.y,p.child?10:16,0,Math.PI*2);
+      ctx.fillStyle="#fff";
       ctx.fill();
     }
   }
 }
 
 // ---------- loop ----------
-let last=0;
-function loop(t){
+function loop(){
   if(!running) return;
 
   update();
@@ -210,14 +219,12 @@ function loop(t){
   requestAnimationFrame(loop);
 }
 
-// ---------- MOBILE DRAG ----------
+// ---------- drag ----------
 c.addEventListener("pointerdown", e=>{
-  const x=e.clientX, y=e.clientY;
-
-  dragging=null;
+  let x=e.clientX, y=e.clientY;
 
   for(let p of pigeons){
-    if(Math.hypot(p.x-x,p.y-y)<50){
+    if(Math.hypot(p.x-x,p.y-y)<30){
       dragging=p;
       break;
     }
@@ -234,7 +241,8 @@ c.addEventListener("pointermove", e=>{
 });
 
 c.addEventListener("pointerup", ()=>dragging=null);
-</script>
 
+</script>
 </body>
 </html>
+
