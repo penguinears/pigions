@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Pigeon Islands</title>
+<style>
+body { margin:0; overflow:hidden; font-family:sans-serif; background:#87ceeb; }
+
+#home {
+  position:absolute; width:100%; height:100%;
+  background:#1e2a3a; color:white;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  z-index:10;
+}
+
+button {
+  padding:12px 20px;
+  font-size:18px;
+  cursor:pointer;
+}
+
+#hud {
+  position:absolute;
+  top:10px; left:10px;
+  color:white;
+  font-size:18px;
+  z-index:5;
+}
+
+canvas { display:block; }
+</style>
+</head>
+<body>
+
+<div id="home">
+  <h1>Pigeon Islands 🐦</h1>
+  <p>Keep as few pigeons as possible in 2 minutes</p>
+  <button onclick="startGame()">Start</button>
+</div>
+
+<div id="hud">
+  Time: <span id="time">120</span>s |
+  Pigeons: <span id="count">0</span>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let pigeons = [];
+let islands = [];
+let dragging = null;
+let offsetX=0, offsetY=0;
+let timeLeft = 120;
+let running = false;
+
+const img = new Image();
+img.src = "images/pigion.png";
+
+function initIslands(){
+  islands = [
+    {x:200,y:300,r:120},
+    {x:canvas.width/2,y:200,r:140},
+    {x:canvas.width-250,y:350,r:130}
+  ];
+}
+
+function spawnPigeon(x,y){
+  pigeons.push({
+    x,y,
+    vx:0, vy:0,
+    target:null,
+    scale:1
+  });
+}
+
+function startGame(){
+  document.getElementById("home").style.display="none";
+  running = true;
+  timeLeft = 120;
+  pigeons = [];
+
+  initIslands();
+
+  for(let i=0;i<4;i++){
+    spawnPigeon(islands[0].x + Math.random()*50, islands[0].y);
+  }
+
+  setInterval(update,1000/60);
+  setInterval(tick,1000);
+}
+
+function tick(){
+  if(!running) return;
+  timeLeft--;
+  document.getElementById("time").innerText = timeLeft;
+  if(timeLeft<=0) running=false;
+}
+
+function update(){
+  if(!running) return;
+
+  // movement + island snap
+  pigeons.forEach(p=>{
+    if(p.target){
+      p.x += (p.target.x - p.x)*0.08;
+      p.y += (p.target.y - p.y)*0.08;
+      p.scale = 1.3;
+    } else {
+      p.scale = 1;
+    }
+
+    // breeding
+    pigeons.forEach(o=>{
+      if(p!==o){
+        let dx=p.x-o.x, dy=p.y-o.y;
+        if(Math.hypot(dx,dy)<20){
+          spawnPigeon(p.x+10,p.y+10);
+        }
+      }
+    });
+
+    // keep on island if dropped in sea
+    let onIsland=false;
+    islands.forEach(i=>{
+      let d=Math.hypot(p.x-i.x,p.y-i.y);
+      if(d<i.r) onIsland=true;
+    });
+
+    if(!onIsland && !dragging){
+      let nearest=islands[0];
+      let dist=99999;
+      islands.forEach(i=>{
+        let d=Math.hypot(p.x-i.x,p.y-i.y);
+        if(d<dist){dist=d; nearest=i;}
+      });
+      p.target=nearest;
+    }
+  });
+
+  document.getElementById("count").innerText = pigeons.length;
+  draw();
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // sea
+  ctx.fillStyle="#4aa3df";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // islands
+  islands.forEach(i=>{
+    ctx.fillStyle="#3c7a3c";
+    ctx.beginPath();
+    ctx.arc(i.x,i.y,i.r,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  // pigeons
+  pigeons.forEach(p=>{
+    if(img.complete){
+      ctx.drawImage(img,p.x-20,p.y-20,40*p.scale,40*p.scale);
+    } else {
+      ctx.fillStyle="white";
+      ctx.fillRect(p.x,p.y,10,10);
+    }
+  });
+}
+
+// drag controls
+canvas.addEventListener("mousedown",e=>{
+  pigeons.forEach(p=>{
+    let d=Math.hypot(p.x-e.clientX,p.y-e.clientY);
+    if(d<25) dragging=p;
+  });
+});
+
+canvas.addEventListener("mousemove",e=>{
+  if(dragging){
+    dragging.x=e.clientX;
+    dragging.y=e.clientY;
+    dragging.target=null;
+  }
+});
+
+canvas.addEventListener("mouseup",()=>{
+  dragging=null;
+});
+
+// mobile touch
+canvas.addEventListener("touchstart",e=>{
+  let t=e.touches[0];
+  pigeons.forEach(p=>{
+    let d=Math.hypot(p.x-t.clientX,p.y-t.clientY);
+    if(d<25) dragging=p;
+  });
+});
+
+canvas.addEventListener("touchmove",e=>{
+  let t=e.touches[0];
+  if(dragging){
+    dragging.x=t.clientX;
+    dragging.y=t.clientY;
+    dragging.target=null;
+  }
+});
+
+canvas.addEventListener("touchend",()=>dragging=null);
+</script>
+
+</body>
+</html>
