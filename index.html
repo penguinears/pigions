@@ -38,7 +38,7 @@ button {
   top:10px;
   left:10px;
   color:white;
-  font-size:20px;
+  font-size:18px;
 }
 
 canvas { display:block; }
@@ -49,11 +49,12 @@ canvas { display:block; }
 
 <div id="home">
   <h1>Pigeon Islands</h1>
-  <p>Keep pigeons LOW. They multiply if they meet!</p>
+  <p>Keep pigeon count LOW in 2 minutes</p>
   <button onclick="start()">Start</button>
 </div>
 
 <div id="hud">
+  Time: <span id="time">120</span> |
   Pigeons: <span id="count">0</span>
 </div>
 
@@ -71,7 +72,7 @@ function resize(){
 window.onresize = resize;
 resize();
 
-// ✅ YOUR IMAGE (kept wrong spelling)
+// ✅ image (your spelling kept)
 const pigeonImg = new Image();
 pigeonImg.src = "images/pigion.png";
 
@@ -80,13 +81,14 @@ let pigeons = [];
 let islands = [];
 let dragging = null;
 let running = false;
+let time = 120;
 
-// ---------- islands ----------
+// ---------- islands (nice separate blobs)
 function makeIslands(){
   islands = [
-    {x:W*0.1,y:H*0.5,w:140,h:140},
-    {x:W*0.4,y:H*0.3,w:160,h:160},
-    {x:W*0.7,y:H*0.5,w:140,h:140},
+    {x:W*0.2,y:H*0.6,r:80},
+    {x:W*0.5,y:H*0.3,r:90},
+    {x:W*0.8,y:H*0.6,r:80},
   ];
 }
 
@@ -95,65 +97,108 @@ function spawn(x,y,child=false){
   pigeons.push({
     x,y,
     vx:0,vy:0,
-    child:child,
+    angle:0,
+    child,
     age: child ? 0 : 999,
-    breedCooldown:0
+    cooldown:0
   });
 }
 
 function start(){
   document.getElementById("home").style.display="none";
+
   pigeons=[];
   makeIslands();
   running=true;
+  time=120;
 
-  // 4 pigeons
-  spawn(islands[0].x+50,islands[0].y+50);
-  spawn(islands[0].x+90,islands[0].y+90);
-  spawn(islands[1].x+60,islands[1].y+60);
-  spawn(islands[2].x+60,islands[2].y+60);
+  spawn(islands[0].x, islands[0].y);
+  spawn(islands[0].x+40, islands[0].y+40);
+  spawn(islands[1].x, islands[1].y);
+  spawn(islands[2].x, islands[2].y);
 
   requestAnimationFrame(loop);
+
+  // countdown
+  setInterval(()=>{
+    if(!running) return;
+
+    time--;
+    document.getElementById("time").innerText = time;
+
+    if(time <= 0){
+      running = false;
+      alert("Finished! Final pigeons: " + pigeons.length);
+    }
+  },1000);
+}
+
+// ---------- helpers ----------
+function onIsland(p){
+  for(let i of islands){
+    if(Math.hypot(p.x-i.x, p.y-i.y) < i.r){
+      return i;
+    }
+  }
+  return null;
 }
 
 // ---------- update ----------
 function update(){
+
   for(let p of pigeons){
 
-    // grow child
     if(p.child){
       p.age++;
-      if(p.age > 60*20) p.child=false; // 20 seconds
+      if(p.age > 60*20) p.child=false;
     }
 
-    if(p.breedCooldown>0) p.breedCooldown--;
+    if(p.cooldown>0) p.cooldown--;
 
-    // movement
     if(p !== dragging){
       p.vx += (Math.random()-0.5)*0.2;
       p.vy += (Math.random()-0.5)*0.2;
+    }
 
-      p.x += p.vx;
-      p.y += p.vy;
+    // limit speed
+    let sp = Math.hypot(p.vx,p.vy);
+    if(sp > 2){
+      p.vx *= 2/sp;
+      p.vy *= 2/sp;
+    }
+
+    let nx = p.x + p.vx;
+    let ny = p.y + p.vy;
+
+    // stay on island
+    let island = onIsland({x:nx,y:ny});
+    if(island || p===dragging){
+      p.x = nx;
+      p.y = ny;
+    } else {
+      p.vx *= -0.5;
+      p.vy *= -0.5;
+    }
+
+    // face direction
+    if(Math.hypot(p.vx,p.vy)>0.1){
+      p.angle = Math.atan2(p.vy, p.vx);
     }
   }
 
   // breeding
   for(let i=0;i<pigeons.length;i++){
     for(let j=i+1;j<pigeons.length;j++){
+      let a=pigeons[i], b=pigeons[j];
 
-      let a=pigeons[i];
-      let b=pigeons[j];
+      if(Math.hypot(a.x-b.x, a.y-b.y) < 40 &&
+         !a.child && !b.child &&
+         a.cooldown===0 && b.cooldown===0){
 
-      let d=Math.hypot(a.x-b.x,a.y-b.y);
+        spawn((a.x+b.x)/2, (a.y+b.y)/2, true);
 
-      if(d<40 && !a.child && !b.child &&
-         a.breedCooldown===0 && b.breedCooldown===0){
-
-        spawn((a.x+b.x)/2,(a.y+b.y)/2,true);
-
-        a.breedCooldown = 300;
-        b.breedCooldown = 300;
+        a.cooldown = 300;
+        b.cooldown = 300;
       }
     }
   }
@@ -166,45 +211,37 @@ function draw(){
   ctx.fillStyle="#4aa3df";
   ctx.fillRect(0,0,W,H);
 
-  // islands (cube look)
+  // islands (nice circles)
   for(let i of islands){
-
-    // top
-    ctx.fillStyle="#3faa3f";
-    ctx.fillRect(i.x,i.y,i.w,i.h);
-
-    // side
-    ctx.fillStyle="#2f7d32";
     ctx.beginPath();
-    ctx.moveTo(i.x, i.y+i.h);
-    ctx.lineTo(i.x+20, i.y+i.h+20);
-    ctx.lineTo(i.x+i.w+20, i.y+i.h+20);
-    ctx.lineTo(i.x+i.w, i.y+i.h);
+    ctx.arc(i.x,i.y,i.r,0,Math.PI*2);
+    ctx.fillStyle="#3faa3f";
     ctx.fill();
 
-    // outline
     ctx.strokeStyle="#d2b48c";
     ctx.lineWidth=6;
-    ctx.strokeRect(i.x,i.y,i.w,i.h);
+    ctx.stroke();
   }
 
-  // pigeons (YOUR IMAGE)
+  // pigeons (rotate to face direction)
   for(let p of pigeons){
 
     if(pigeonImg.complete){
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+
+      let size = p.child ? 25 : 40;
+
       ctx.drawImage(
         pigeonImg,
-        p.x - (p.child ? 15 : 20),
-        p.y - (p.child ? 15 : 20),
-        p.child ? 30 : 40,
-        p.child ? 30 : 40
+        -size/2,
+        -size/2,
+        size,
+        size
       );
-    } else {
-      // fallback
-      ctx.beginPath();
-      ctx.arc(p.x,p.y,p.child?10:16,0,Math.PI*2);
-      ctx.fillStyle="#fff";
-      ctx.fill();
+
+      ctx.restore();
     }
   }
 }
@@ -215,7 +252,6 @@ function loop(){
 
   update();
   draw();
-
   requestAnimationFrame(loop);
 }
 
@@ -234,10 +270,14 @@ c.addEventListener("pointerdown", e=>{
 c.addEventListener("pointermove", e=>{
   if(!dragging) return;
 
-  dragging.x = e.clientX;
-  dragging.y = e.clientY;
-  dragging.vx = 0;
-  dragging.vy = 0;
+  let nx = e.clientX;
+  let ny = e.clientY;
+
+  // only allow dragging onto islands
+  if(onIsland({x:nx,y:ny})){
+    dragging.x = nx;
+    dragging.y = ny;
+  }
 });
 
 c.addEventListener("pointerup", ()=>dragging=null);
