@@ -4,52 +4,31 @@
 <meta charset="UTF-8">
 <title>Pigeon Islands</title>
 <style>
-body {
-  margin:0;
-  overflow:hidden;
-  font-family:Arial;
-  background:#6fb7e9;
-}
+body { margin:0; overflow:hidden; font-family:Arial; background:#6fb7e9; }
 
 #home {
-  position:absolute;
-  width:100%;
-  height:100%;
-  background:#1e2a3a;
-  color:white;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
+  position:absolute; width:100%; height:100%;
+  background:#1e2a3a; color:white;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
   z-index:10;
 }
 
-button {
-  padding:12px 20px;
-  font-size:18px;
-  cursor:pointer;
-}
+button { padding:12px 20px; font-size:18px; }
 
 #hud {
-  position:absolute;
-  top:10px;
-  left:10px;
-  color:white;
-  font-size:18px;
-  z-index:5;
+  position:absolute; top:10px; left:10px;
+  color:white; font-size:18px;
 }
 
-canvas {
-  display:block;
-}
+canvas { display:block; }
 </style>
 </head>
-
 <body>
 
 <div id="home">
   <h1>Pigeon Islands</h1>
-  <p>Keep pigeon population as low as possible in 2 minutes</p>
+  <p>Keep pigeons low for 2 minutes</p>
   <button onclick="startGame()">Start</button>
 </div>
 
@@ -61,164 +40,155 @@ canvas {
 <canvas id="game"></canvas>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const c=document.getElementById("game");
+const ctx=c.getContext("2d");
 
 function resize(){
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  c.width=window.innerWidth;
+  c.height=window.innerHeight;
 }
-resize();
-window.addEventListener("resize",resize);
+resize(); window.onresize=resize;
 
-let pigeons = [];
-let islands = [];
-let dragging = null;
-let timeLeft = 120;
-let running = false;
-let loopStarted = false;
+let pigeons=[];
+let islands=[];
+let dragging=null;
+let running=false;
+let time=120;
 
-const img = new Image();
-img.src = "images/pigion.png";
-
-// RECTANGLE ISLANDS
-function initIslands(){
-  islands = [
-    {x:150,y:250,w:200,h:160},
-    {x:canvas.width/2 - 100,y:150,w:220,h:180},
-    {x:canvas.width-350,y:300,w:200,h:170}
+function init(){
+  islands=[
+    {x:120,y:200,w:280,h:220},
+    {x:c.width/2-150,y:120,w:300,h:240},
+    {x:c.width-420,y:260,w:300,h:240}
   ];
 }
 
-function spawnPigeon(x,y){
-  pigeons.push({x,y,scale:1});
+function spawn(x,y,baby=true){
+  pigeons.push({
+    x,y,
+    baby:baby,
+    age:0,
+    cd:Math.random()*2
+  });
 }
 
 function startGame(){
   document.getElementById("home").style.display="none";
-
-  pigeons = [];
-  initIslands();
+  running=true;
+  time=120;
+  pigeons=[];
+  init();
 
   for(let i=0;i<4;i++){
-    spawnPigeon(islands[0].x+50+i*10, islands[0].y+50);
+    spawn(islands[0].x+100+i*20,islands[0].y+100,true);
   }
 
-  timeLeft = 120;
-  running = true;
-
-  if(!loopStarted){
-    setInterval(update,1000/60);
-    setInterval(tick,1000);
-    loopStarted = true;
-  }
+  setInterval(update,1000/60);
+  setInterval(tick,1000);
 }
 
 function tick(){
   if(!running) return;
-  timeLeft--;
-  document.getElementById("time").innerText = timeLeft;
-  if(timeLeft <= 0) running = false;
+  time--;
+  document.getElementById("time").innerText=time;
+  if(time<=0) running=false;
 }
 
-function insideIsland(p,i){
-  return (
-    p.x > i.x &&
-    p.x < i.x + i.w &&
-    p.y > i.y &&
-    p.y < i.y + i.h
-  );
+function inside(p,i){
+  return p.x>i.x&&p.x<i.x+i.w&&p.y>i.y&&p.y<i.y+i.h;
 }
 
 function update(){
   if(!running) return;
 
-  // breeding (slowed down)
-  for(let i=0;i<pigeons.length;i++){
-    for(let j=i+1;j<pigeons.length;j++){
-      let a=pigeons[i], b=pigeons[j];
-      let d=Math.hypot(a.x-b.x,a.y-b.y);
-      if(d<20 && Math.random()<0.01){
-        spawnPigeon(a.x+10,a.y+10);
-      }
-    }
-  }
-
-  // snap out of sea -> nearest island
   pigeons.forEach(p=>{
-    let on=false;
-    islands.forEach(i=>{
-      if(insideIsland(p,i)) on=true;
+
+    // grow from baby → adult
+    p.age+=0.01;
+    if(p.age>2) p.baby=false;
+
+    // cooldown breeding
+    if(p.cd>0) p.cd-=0.02;
+
+    // movement ONLY if adult
+    if(!p.baby && !dragging){
+      p.x += (Math.random()-0.5)*2;
+      p.y += (Math.random()-0.5)*2;
+    }
+
+    // breeding (COOLDOWN FIX)
+    pigeons.forEach(o=>{
+      if(p!==o && !p.baby && !o.baby && p.cd<=0 && o.cd<=0){
+        let d=Math.hypot(p.x-o.x,p.y-o.y);
+        if(d<25 && Math.random()<0.01){
+          spawn(p.x+10,p.y+10,true);
+          p.cd=3;
+          o.cd=3;
+        }
+      }
     });
 
-    if(!on && !dragging){
-      let best=null,dist=999999;
-      islands.forEach(i=>{
-        let cx=i.x+i.w/2;
-        let cy=i.y+i.h/2;
-        let d=Math.hypot(p.x-cx,p.y-cy);
-        if(d<dist){dist=d; best=i;}
-      });
-      p.x = best.x + best.w/2;
-      p.y = best.y + best.h/2;
-    }
+    // keep on islands
+    let ok=false;
+    islands.forEach(i=>{
+      if(inside(p,i)) ok=true;
+    });
 
-    p.scale = (dragging===p)?1.3:1;
+    if(!ok && !dragging){
+      let best=islands[0];
+      let bd=99999;
+      islands.forEach(i=>{
+        let cx=i.x+i.w/2, cy=i.y+i.h/2;
+        let d=Math.hypot(p.x-cx,p.y-cy);
+        if(d<bd){bd=d;best=i;}
+      });
+      p.x=best.x+best.w/2;
+      p.y=best.y+best.h/2;
+    }
   });
 
-  document.getElementById("count").innerText = pigeons.length;
-
+  document.getElementById("count").innerText=pigeons.length;
   draw();
 }
 
 function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  // sea
   ctx.fillStyle="#4aa3df";
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillRect(0,0,c.width,c.height);
 
-  // islands (rectangles with sandy edges)
   islands.forEach(i=>{
-    ctx.fillStyle="#3b7d3b";
+    ctx.fillStyle="#3d8b3d";
     ctx.fillRect(i.x,i.y,i.w,i.h);
 
     ctx.strokeStyle="#d2b48c";
-    ctx.lineWidth=10;
+    ctx.lineWidth=12;
     ctx.strokeRect(i.x,i.y,i.w,i.h);
   });
 
-  // pigeons
   pigeons.forEach(p=>{
-    if(img.complete){
-      ctx.drawImage(img,p.x-20,p.y-20,40*p.scale,40*p.scale);
-    } else {
-      ctx.fillStyle="white";
-      ctx.fillRect(p.x,p.y,10,10);
-    }
+    ctx.fillStyle=p.baby?"#ddd":"white";
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,10,0,Math.PI*2);
+    ctx.fill();
   });
 }
 
-// DRAG FIXED (pointer events)
-canvas.addEventListener("pointerdown",e=>{
+// drag FIX
+c.addEventListener("pointerdown",e=>{
   pigeons.forEach(p=>{
-    let d=Math.hypot(p.x-e.clientX,p.y-e.clientY);
-    if(d<25) dragging=p;
+    if(Math.hypot(p.x-e.clientX,p.y-e.clientY)<20)
+      dragging=p;
   });
 });
 
-canvas.addEventListener("pointermove",e=>{
+c.addEventListener("pointermove",e=>{
   if(dragging){
     dragging.x=e.clientX;
     dragging.y=e.clientY;
   }
 });
 
-canvas.addEventListener("pointerup",()=>{
-  dragging=null;
-});
+c.addEventListener("pointerup",()=>dragging=null);
 
 </script>
-
 </body>
 </html>
