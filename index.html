@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pigeon Islands</title>
+<title>Sheep Islands</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -14,6 +14,7 @@ body {
   touch-action:none;
 }
 
+/* HOME SCREEN */
 #home {
   position:absolute;
   inset:0;
@@ -26,11 +27,30 @@ body {
   z-index:10;
 }
 
+#home h1 {
+  font-size:70px;
+  margin:0;
+  letter-spacing:4px;
+}
+
+#spinSheep {
+  width:160px;
+  height:160px;
+  animation:spin 3s linear infinite;
+  margin-bottom:20px;
+}
+
+@keyframes spin {
+  from { transform:rotate(0deg); }
+  to { transform:rotate(360deg); }
+}
+
 button {
   padding:18px 30px;
   font-size:22px;
   border-radius:12px;
   border:none;
+  cursor:pointer;
 }
 
 #hud {
@@ -48,14 +68,14 @@ canvas { display:block; }
 <body>
 
 <div id="home">
-  <h1>Pigeon Islands</h1>
-  <p>Keep pigeon count LOW in 2 minutes</p>
-  <button onclick="start()">Start</button>
+  <img id="spinSheep" src="sheep.png">
+  <h1>SHEEP</h1>
+  <button onclick="start()">PLAY</button>
 </div>
 
 <div id="hud">
   Time: <span id="time">120</span> |
-  Pigeons: <span id="count">0</span>
+  Sheep: <span id="count">0</span>
 </div>
 
 <canvas id="c"></canvas>
@@ -72,29 +92,43 @@ function resize(){
 window.onresize = resize;
 resize();
 
-// ✅ image (your spelling kept)
-const pigeonImg = new Image();
-pigeonImg.src = "images/pigion.png";
+// SHEEP IMAGE
+const sheepImg = new Image();
+sheepImg.src = "sheep.png";
 
 // ---------- game ----------
-let pigeons = [];
+let sheep = [];
 let islands = [];
 let dragging = null;
 let running = false;
 let time = 120;
 
-// ---------- islands (nice separate blobs)
+// ---------- RANDOM CUBE ISLANDS ----------
 function makeIslands(){
-  islands = [
-    {x:W*0.2,y:H*0.6,r:80},
-    {x:W*0.5,y:H*0.3,r:90},
-    {x:W*0.8,y:H*0.6,r:80},
-  ];
+  islands = [];
+
+  for(let k=0;k<3;k++){
+    let cx = W*(0.25 + 0.25*k);
+    let cy = H*0.5;
+    let cubes = [];
+
+    let count = 40 + Math.floor(Math.random()*40);
+
+    for(let i=0;i<count;i++){
+      cubes.push({
+        x: cx + (Math.random()*200 - 100),
+        y: cy + (Math.random()*200 - 100),
+        s: 20 + Math.random()*20
+      });
+    }
+
+    islands.push({ cubes });
+  }
 }
 
-// ---------- pigeons ----------
+// ---------- sheep ----------
 function spawn(x,y,child=false){
-  pigeons.push({
+  sheep.push({
     x,y,
     vx:0,vy:0,
     angle:0,
@@ -107,19 +141,24 @@ function spawn(x,y,child=false){
 function start(){
   document.getElementById("home").style.display="none";
 
-  pigeons=[];
+  sheep=[];
   makeIslands();
   running=true;
   time=120;
 
-  spawn(islands[0].x, islands[0].y);
-  spawn(islands[0].x+40, islands[0].y+40);
-  spawn(islands[1].x, islands[1].y);
-  spawn(islands[2].x, islands[2].y);
+  // spawn on island centers
+  for(let isl of islands){
+    let cx=0, cy=0;
+    for(let c of isl.cubes){ cx+=c.x; cy+=c.y; }
+    cx/=isl.cubes.length;
+    cy/=isl.cubes.length;
+
+    spawn(cx,cy);
+    spawn(cx+40,cy+40);
+  }
 
   requestAnimationFrame(loop);
 
-  // countdown
   setInterval(()=>{
     if(!running) return;
 
@@ -128,68 +167,76 @@ function start(){
 
     if(time <= 0){
       running = false;
-      alert("Finished! Final pigeons: " + pigeons.length);
+      alert("Finished! Final sheep: " + sheep.length);
     }
   },1000);
 }
 
 // ---------- helpers ----------
 function onIsland(p){
-  for(let i of islands){
-    if(Math.hypot(p.x-i.x, p.y-i.y) < i.r){
-      return i;
+  for(let isl of islands){
+    for(let c of isl.cubes){
+      if(p.x > c.x-c.s/2 &&
+         p.x < c.x+c.s/2 &&
+         p.y > c.y-c.s/2 &&
+         p.y < c.y+c.s/2){
+        return true;
+      }
     }
   }
-  return null;
+  return false;
 }
 
 // ---------- update ----------
 function update(){
 
-  for(let p of pigeons){
+  for(let s of sheep){
 
-    if(p.child){
-      p.age++;
-      if(p.age > 60*20) p.child=false;
+    // grow child
+    if(s.child){
+      s.age++;
+      if(s.age > 60*20) s.child=false;
     }
 
-    if(p.cooldown>0) p.cooldown--;
+    if(s.cooldown>0) s.cooldown--;
 
-    if(p !== dragging){
-      p.vx += (Math.random()-0.5)*0.2;
-      p.vy += (Math.random()-0.5)*0.2;
+    // smoother wandering
+    if(s !== dragging){
+      let targetAngle = Math.random()*Math.PI*2;
+      s.vx += Math.cos(targetAngle)*0.05;
+      s.vy += Math.sin(targetAngle)*0.05;
     }
 
     // limit speed
-    let sp = Math.hypot(p.vx,p.vy);
-    if(sp > 2){
-      p.vx *= 2/sp;
-      p.vy *= 2/sp;
+    let sp = Math.hypot(s.vx,s.vy);
+    if(sp > 1.5){
+      s.vx *= 1.5/sp;
+      s.vy *= 1.5/sp;
     }
 
-    let nx = p.x + p.vx;
-    let ny = p.y + p.vy;
+    let nx = s.x + s.vx;
+    let ny = s.y + s.vy;
 
-    // stay on island
-    let island = onIsland({x:nx,y:ny});
-    if(island || p===dragging){
-      p.x = nx;
-      p.y = ny;
+    // stay on island OR if dragged off, snap back
+    if(onIsland({x:nx,y:ny}) || s===dragging){
+      s.x = nx;
+      s.y = ny;
     } else {
-      p.vx *= -0.5;
-      p.vy *= -0.5;
+      // bounce back toward nearest island
+      s.vx *= -0.3;
+      s.vy *= -0.3;
     }
 
     // face direction
-    if(Math.hypot(p.vx,p.vy)>0.1){
-      p.angle = Math.atan2(p.vy, p.vx);
+    if(Math.hypot(s.vx,s.vy)>0.1){
+      s.angle = Math.atan2(s.vy, s.vx);
     }
   }
 
   // breeding
-  for(let i=0;i<pigeons.length;i++){
-    for(let j=i+1;j<pigeons.length;j++){
-      let a=pigeons[i], b=pigeons[j];
+  for(let i=0;i<sheep.length;i++){
+    for(let j=i+1;j<sheep.length;j++){
+      let a=sheep[i], b=sheep[j];
 
       if(Math.hypot(a.x-b.x, a.y-b.y) < 40 &&
          !a.child && !b.child &&
@@ -203,7 +250,7 @@ function update(){
     }
   }
 
-  document.getElementById("count").innerText = pigeons.length;
+  document.getElementById("count").innerText = sheep.length;
 }
 
 // ---------- draw ----------
@@ -211,30 +258,29 @@ function draw(){
   ctx.fillStyle="#4aa3df";
   ctx.fillRect(0,0,W,H);
 
-  // islands (nice circles)
-  for(let i of islands){
-    ctx.beginPath();
-    ctx.arc(i.x,i.y,i.r,0,Math.PI*2);
-    ctx.fillStyle="#3faa3f";
-    ctx.fill();
+  // cube islands
+  for(let isl of islands){
+    for(let c of isl.cubes){
+      ctx.fillStyle="#3faa3f";
+      ctx.fillRect(c.x-c.s/2, c.y-c.s/2, c.s, c.s);
 
-    ctx.strokeStyle="#d2b48c";
-    ctx.lineWidth=6;
-    ctx.stroke();
+      ctx.strokeStyle="#d2b48c";
+      ctx.lineWidth=2;
+      ctx.strokeRect(c.x-c.s/2, c.y-c.s/2, c.s, c.s);
+    }
   }
 
-  // pigeons (rotate to face direction)
-  for(let p of pigeons){
-
-    if(pigeonImg.complete){
+  // sheep
+  for(let s of sheep){
+    if(sheepImg.complete){
       ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.angle);
+      ctx.translate(s.x, s.y);
+      ctx.rotate(s.angle);
 
-      let size = p.child ? 25 : 40;
+      let size = s.child ? 25 : 40;
 
       ctx.drawImage(
-        pigeonImg,
+        sheepImg,
         -size/2,
         -size/2,
         size,
@@ -259,9 +305,9 @@ function loop(){
 c.addEventListener("pointerdown", e=>{
   let x=e.clientX, y=e.clientY;
 
-  for(let p of pigeons){
-    if(Math.hypot(p.x-x,p.y-y)<30){
-      dragging=p;
+  for(let s of sheep){
+    if(Math.hypot(s.x-x,s.y-y)<30){
+      dragging=s;
       break;
     }
   }
@@ -285,4 +331,3 @@ c.addEventListener("pointerup", ()=>dragging=null);
 </script>
 </body>
 </html>
-
